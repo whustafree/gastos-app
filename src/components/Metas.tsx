@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { getMetas, addMeta, updateMetaAhorro, deleteMeta } from '../utils/storage';
 import { Plus, X, Trash2, Target, TrendingUp, Calendar, PiggyBank } from 'lucide-react';
+import PullToRefresh from './PullToRefresh';
 
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -68,7 +69,12 @@ export default function Metas() {
   const totalAhorrado = metas.reduce((s, m) => s + m.montoActual, 0);
   const totalObjetivo = metas.reduce((s, m) => s + m.montoObjetivo, 0);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshKey(k => k + 1);
+  }, []);
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -262,5 +268,6 @@ export default function Metas() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

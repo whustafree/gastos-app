@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { getGastos, addGasto, deleteGasto } from '../utils/storage';
 import type { Gasto } from '../utils/storage';
 import { Plus, X, Trash2, Search, Wallet, Filter } from 'lucide-react';
+import PullToRefresh from './PullToRefresh';
 
 const CATEGORIAS = [
   { id: 'alimentacion', label: 'Alimentación', icon: '🍽️' },
@@ -84,7 +85,12 @@ export default function Gastos() {
     return grouped;
   }, [gastos]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshKey(k => k + 1);
+  }, []);
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -312,5 +318,6 @@ export default function Gastos() {
         </div>
       )}
     </div>
+    </PullToRefresh>
   );
 }

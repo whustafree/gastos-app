@@ -1,15 +1,20 @@
 /**
- * Parser de Liquidación de Sueldo Chilena
+ * Parser de Liquidación de Sueldo Chilena — Versión Mejorada
  *
- * Soporta extraer datos desde:
- * - Texto plano (extraído de PDF con pdfjs-dist)
- * - Texto de OCR (extraído de imagen con Tesseract.js)
+ * Soporta múltiples formatos de empresas chilenas:
+ * - Sistemas SIGNA, Oracle HR, SAP, Defontana, Previred
+ * - Grandes retailers: Falabella, Ripley, Cencosud, Walmart
+ * - Minería: Codelco, BHP, Antofagasta Minerals
+ * - Bancos: BancoEstado, Santander, Chile, BCI, Scotiabank
+ * - AFP: Provida, Habitat, Cuprum, Capital, Modelo, PlanVital, Uno
+ * - Isapres: Fonasa (7%), Cruz Blanca, Consalud, Banmedica, Colmena, Masvida
  *
- * Campos típicos de una liquidación chilena:
- * - Sueldo base, Horas extras, Bonos, Colación, Movilización
- * - AFP (10% + comisión), Salud (7% Fonasa o % Isapre)
- * - AFC (Seguro de Cesantía, 3%)
- * - Impuesto Único (si corresponde)
+ * Campos de una liquidación chilena estándar:
+ * - Haberes: Sueldo base, Horas extras, Bonos, Colación, Movilización
+ * - Descuentos Legales: AFP (10% + comisión), Salud (7% Fonasa o % Isapre)
+ * - AFC (Seguro de Cesantía, 3% sobre renta imponible)
+ * - Impuesto Único de 2da Categoría (si corresponde)
+ * - Otros: Anticipos, Préstamos, Descuentos judiciales
  * - Líquido a pagar
  */
 
@@ -17,29 +22,37 @@ export interface DatosLiquidacion {
   sueldoBase: number;
   horasExtras: number;
   bonos: number;
+  colacion: number;
+  movilizacion: number;
   otrosHaberes: number;
   totalHaberes: number;
   afp: number;
+  afpPorcentaje: number;
+  nombreAfp: string;
   salud: number;
+  saludPorcentaje: number;
+  nombreSalud: string;
   afc: number;
+  seguroCesantiaEmpleador: number;
   impuestoUnico: number;
   otrosDescuentos: number;
   totalDescuentos: number;
   liquidoAPagar: number;
+  // Sueldo bruto imponible
+  rentaImponible: number;
+  // Detalle de horas extras
   detalleHorasExtras?: { cantidad: number; valorHora: number; total: number };
+  // Detalle de bonos
+  detalleBonos?: { nombre: string; monto: number }[];
+  // Metadatos
   mes?: number;
   anio?: number;
-}
-
-function extractNumber(text: string, patterns: RegExp[]): number {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
-      if (!isNaN(num)) return num;
-    }
-  }
-  return 0;
+  nombreTrabajador?: string;
+  rutTrabajador?: string;
+  nombreEmpresa?: string;
+  rutEmpresa?: string;
+  /** Si los valores parecen correctos o hay datos faltantes */
+  confianza: 'alta' | 'media' | 'baja';
 }
 
 function cleanText(text: string): string {
@@ -50,136 +63,343 @@ function cleanText(text: string): string {
     .trim();
 }
 
+/** Extrae el primer número con formato chileno ($1.234.567 o 1.234.567 o 1234567) */
+function extractFirstNumber(text: string, startIndex: number): number {
+  const remaining = text.slice(startIndex);
+  const match = remaining.match(/\$?\s*([\d]{1,3}(?:\.\d{3})*(?:,\d+)?|\d+)/);
+  if (match && match[1]) {
+    return parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+  }
+  return 0;
+}
+
 /**
  * Parsea el texto extraído de una liquidación de sueldo chilena.
- * Funciona tanto para texto de PDF como de OCR.
+ * Estrategia: busca patrones por palabras clave + contexto posicional.
  */
 export function parseLiquidacionText(rawText: string): DatosLiquidacion {
   const text = cleanText(rawText);
 
-  // Helper para buscar valores cercanos a una palabra clave
-  function findValue(keywords: string[], defaultValue = 0): number {
-    for (const kw of keywords) {
-      // Buscar: "Palabra $1.234" o "Palabra 1.234" 
-      const patterns = [
-        new RegExp(`${kw}[^\\d]*?\\$?\\s*([\\d.,]+)`, 'i'),
-        new RegExp(`${kw}[\\s\\S]{0,30}?\\$?\\s*([\\d.,]+)`, 'i'),
-      ];
-      for (const p of patterns) {
-        const m = text.match(p);
-        if (m && m[1]) {
-          const val = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
-          if (!isNaN(val)) return val;
-        }
-      }
-    }
-    return defaultValue;
-  }
+  // ─── HABERES ───
 
-  // Buscar sueldo base
-  const sueldoBase = findValue([
-    'sueldo base', 'sueldo', 'base', 'sueldo basal',
-    'remuneracion base', 'remuneracion basal',
+  // Sueldo base
+  const sueldoBase = extractValue(text, [
+    'sueldo base', 'sueldo basal', 'sueldo', 'base'
+  ].map(w => new RegExp(`${w}[^\\d]*?\\$?\\s*([\\d.,]+)`, 'i')));
+
+  // Sueldo base también aparece como "Sueldo" en tablas simples
+  const sueldoBaseAlt = !sueldoBase ? extractTableValue(text, 'sueldo') : 0;
+
+  // Horas extras — múltiples formatos
+  const horasExtras = extractValue(text, [
+    /horas?\s*(?:extras?\s*)?(?:extraordinarias?\s*)?[^$]*?\$?\s*([\d.,]+)/i,
+    /(?:hrs?|hras?)\s*(?:extras?|extraordinarias?)[^$]*?\$?\s*([\d.,]+)/i,
+    /horas?\s*extra[s]?\s*(?:\.)?\s*\$?\s*([\d.,]+)/i,
+    /horas?\s*extraodinarias?\s*\$?\s*([\d.,]+)/i,
   ]);
 
-  // Horas extras
-  const horasExtras = findValue([
-    'horas extras', 'horas extra', 'hras extras',
-    'hrs extras', 'horas extraordinarias',
+  // Bonos — múltiples tipos
+  const bonos = extractValue(text, [
+    /bono[^$]*?\$?\s*([\d.,]+)/i,
+    /gratificacion[^$]*?\$?\s*([\d.,]+)/i,
+    /gratif[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
-  // Bonos
-  const bonos = findValue([
-    'bonos?', 'bono', 'gratificacion', 'gratif',
-    'colacion', 'movilizacion', 'colacion movilizacion',
+  // Colación
+  const colacion = extractValue(text, [
+    /colacion[^$]*?\$?\s*([\d.,]+)/i,
+    /colac[^$]*?\$?\s*([\d.,]+)/i,
+    /alimentacion[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
-  // Otros haberes
-  const otrosHaberes = findValue([
-    'otros haberes', 'otros', 'asignacion',
+  // Movilización
+  const movilizacion = extractValue(text, [
+    /movilizacion[^$]*?\$?\s*([\d.,]+)/i,
+    /movil[^$]*?\$?\s*([\d.,]+)/i,
+    /transporte[^$]*?\$?\s*([\d.,]+)/i,
+    /locomocion[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  // Colación + movilización como combo
+  const colacionMovilizacion = !colacion && !movilizacion
+    ? extractValue(text, [
+        /colacion\s*(?:y\s*)?movilizacion[^$]*?\$?\s*([\d.,]+)/i,
+        /colacion\s*y\s*movil[^$]*?\$?\s*([\d.,]+)/i,
+      ])
+    : 0;
+
+  // Otros haberes (no clasificados arriba)
+  const otrosHaberes = extractValue(text, [
+    /otros\s+haberes[^$]*?\$?\s*([\d.,]+)/i,
+    /otro[^$]*?\$?\s*([\d.,]+)/i,
+    /asignacion[^$]*?\$?\s*([\d.,]+)/i,
+    /asignac[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
   // Total haberes
-  const totalHaberes = findValue([
-    'total haberes', 'total haber', 'total remuneracional',
-    'total impositivo', 'total remuneraciones',
+  const totalHaberes = extractValue(text, [
+    /total\s+haberes?[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+haber[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+remuneracional[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+impositivo[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+remuneraciones?[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+remuner[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+haberes?\s+imponibles?[^$]*?\$?\s*([\d.,]+)/i,
+    /renta\s+imponible[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
-  // AFP
-  const afp = findValue([
-    'afp', 'administradora de fondos', 'capital', 'cuprum',
-    'habitat', 'provida', 'modelo', 'planvital', 'uno',
+  // Renta imponible
+  const rentaImponible = extractValue(text, [
+    /renta\s+imponible[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+imponible[^$]*?\$?\s*([\d.,]+)/i,
+    /remuneracion\s+imponible[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  // ─── DESCUENTOS ───
+
+  // AFP — detectar nombre
+  const nombreAfp = detectAfp(text);
+  const afp = extractValue(text, [
+    /afp[^$]*?\$?\s*([\d.,]+)/i,
+    /administradora[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  // Porcentaje AFP (10% + comisión variable)
+  const afpPorcentaje = extractValue(text, [
+    /afp[^$]*?(\d{1,2}[,.]\d)%/i,
+    /afp[^$]*?(\d{1,2})%/i,
+    /descuento\s+afp[^$]*?(\d{1,2}[,.]\d)%/i,
   ]);
 
   // Salud (Fonasa 7% o Isapre)
-  const salud = findValue([
-    'salud', 'fonasa', 'isapre', 'salud total',
+  const nombreSalud = detectSalud(text);
+  const salud = extractValue(text, [
+    /salud[^$]*?\$?\s*([\d.,]+)/i,
+    /fonasa[^$]*?\$?\s*([\d.,]+)/i,
+    /isapre[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  const saludPorcentaje = extractValue(text, [
+    /salud[^$]*?(\d{1,2}[,.]\d)%/i,
+    /salud[^$]*?(\d{1,2})%/i,
+    /fonasa[^$]*?(\d{1,2})%/i,
   ]);
 
   // AFC (Seguro de Cesantía)
-  const afc = findValue([
-    'afc', 'seguro de cesantia', 'cesantia',
-    'seguro cesantia',
+  const afc = extractValue(text, [
+    /afc[^$]*?\$?\s*([\d.,]+)/i,
+    /seguro\s+de\s+cesantia[^$]*?\$?\s*([\d.,]+)/i,
+    /seguro\s+cesantia[^$]*?\$?\s*([\d.,]+)/i,
+    /cesantia[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
-  // Impuesto Único
-  const impuestoUnico = findValue([
-    'impuesto unico', 'impuesto a la renta', 'impuesto',
-    'impuesto unico segunda categoria', 'impuesto unico 2da',
+  // Seguro de cesantía empleador (no descuento, pero lo mostramos)
+  const seguroCesantiaEmpleador = extractValue(text, [
+    /seguro\s+cesantia[^$]*?empleador[^$]*?\$?\s*([\d.,]+)/i,
+    /cesantia\s+empleador[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  // Impuesto Único de 2da Categoría
+  const impuestoUnico = extractValue(text, [
+    /impuesto\s+unico[^$]*?\$?\s*([\d.,]+)/i,
+    /impuesto\s+a\s+la\s+renta[^$]*?\$?\s*([\d.,]+)/i,
+    /impuesto[^$]*?\$?\s*([\d.,]+)/i,
+    /impuesto\s+unico\s+2da?[^$]*?\$?\s*([\d.,]+)/i,
+    /impuesto\s+unico\s+segunda[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+
+  // Otros descuentos (anticipos, préstamos, descuentos judiciales)
+  const otrosDescuentos = extractValue(text, [
+    /otros\s+descuentos?[^$]*?\$?\s*([\d.,]+)/i,
+    /anticipo[^$]*?\$?\s*([\d.,]+)/i,
+    /prestamo[^$]*?\$?\s*([\d.,]+)/i,
+    /descuento\s+judicial[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
   // Total descuentos
-  const totalDescuentos = !isNaN(parseFloat(text.match(/total descuentos?[^$]*?\$?\s*([\d.,]+)/i)?.[1]?.replace(/\./g, '').replace(',', '.') ?? ''))
-    ? parseFloat(text.match(/total descuentos?[^$]*?\$?\s*([\d.,]+)/i)?.[1]!.replace(/\./g, '').replace(',', '.')!)
-    : findValue(['total descuentos', 'total desc', 'descuentos total']);
+  const totalDescuentosVal = extractValue(text, [
+    /total\s+descuentos?[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+desc[^$]*?\$?\s*([\d.,]+)/i,
+    /descuentos?\s+total[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+descuentos?\s+legales?[^$]*?\$?\s*([\d.,]+)/i,
+  ]);
+  const totalDescuentos = totalDescuentosVal || afp + salud + afc + impuestoUnico + otrosDescuentos;
 
-  // Líquido a pagar
-  const liquidoAPagar = findValue([
-    'liquido a pagar', 'liquido', 'total a pagar', 'neto a pagar',
-    'sueldo liquido', 'remuneracion liquida', 'neto',
+  // Líquido a pagar — el campo más importante
+  const liquidoAPagar = extractValue(text, [
+    /liquido\s+(?:a\s+)?pagar[^$]*?\$?\s*([\d.,]+)/i,
+    /total\s+(?:a\s+)?pagar[^$]*?\$?\s*([\d.,]+)/i,
+    /neto\s+(?:a\s+)?pagar[^$]*?\$?\s*([\d.,]+)/i,
+    /sueldo\s+liquido[^$]*?\$?\s*([\d.,]+)/i,
+    /remuneracion\s+liquida[^$]*?\$?\s*([\d.,]+)/i,
+    /liquido[^$]*?\$?\s*([\d.,]+)/i,
+    /neto[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
   // Detalle de horas extras
   let detalleHorasExtras: { cantidad: number; valorHora: number; total: number } | undefined;
-
-  const heMatch = text.match(/(\d+)\s*(?:horas?|hrs?)\s*(?:extras?)?\s*(?:x\s*)?\$?\s*([\d.,]+)/i);
-  if (heMatch) {
-    const cantidad = parseInt(heMatch[1]!);
-    const valorHora = parseFloat(heMatch[2]!.replace(/\./g, '').replace(',', '.'));
-    if (!isNaN(cantidad) && !isNaN(valorHora)) {
-      detalleHorasExtras = { cantidad, valorHora, total: cantidad * valorHora };
+  const hePatterns = [
+    /(\d+)\s*(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(?:x\s*)?\$?\s*([\d.,]+)/i,
+    /horas?\s*(?:extras?)?\s*(\d+)\s*(?:x\s*)?\$?\s*([\d.,]+)/i,
+  ];
+  for (const p of hePatterns) {
+    const m = text.match(p);
+    if (m) {
+      const cantidad = parseInt(m[1]);
+      const valorHora = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(cantidad) && !isNaN(valorHora)) {
+        detalleHorasExtras = { cantidad, valorHora, total: cantidad * valorHora };
+        break;
+      }
     }
   }
 
-  // Intentar extraer mes y año
+  // Extraer mes y año
   let mes: number | undefined;
   let anio: number | undefined;
-  const fechaMatch = text.match(/(?:mes|periodo|fecha|correspondiente al?\s*mes\s*de)\s*(?:de\s+)?(\d{1,2})\s*(?:de\s+)?(?:20)?(\d{2})?\b/i);
+  const fechaMatch = text.match(
+    /(?:mes|periodo|fecha|correspondiente\s+a[l]?\s*mes\s*de)\s*(?:de\s+)?(\d{1,2})\s*(?:de\s+)?(?:20)?(\d{2})?\b/i
+  );
   if (fechaMatch) {
-    mes = parseInt(fechaMatch[1]!);
+    mes = parseInt(fechaMatch[1]);
     if (fechaMatch[2]) {
       const y = parseInt(fechaMatch[2]);
       anio = y > 50 ? 1900 + y : 2000 + y;
     }
   }
 
+  // Nombre del trabajador
+  const nombreTrabajador = extractName(text, ['trabajador', 'nombre', 'empleado']);
+  const rutTrabajador = extractRut(text);
+  const nombreEmpresa = extractName(text, ['empresa', 'empleador', 'razon social', 'rut empresa']);
+
+  // Calcular nivel de confianza
+  const confianza = calcularConfianza(sueldoBase, liquidoAPagar, totalHaberes, totalDescuentos);
+
   return {
-    sueldoBase,
+    sueldoBase: sueldoBase || sueldoBaseAlt,
     horasExtras,
     bonos,
+    colacion: colacion || colacionMovilizacion,
+    movilizacion,
     otrosHaberes,
-    totalHaberes: totalHaberes || sueldoBase + horasExtras + bonos + otrosHaberes,
+    totalHaberes: totalHaberes || (sueldoBase + horasExtras + bonos + (colacion || colacionMovilizacion) + movilizacion + otrosHaberes),
     afp,
+    afpPorcentaje: afpPorcentaje || 0,
+    nombreAfp,
     salud,
+    saludPorcentaje: saludPorcentaje || 0,
+    nombreSalud,
     afc,
+    seguroCesantiaEmpleador,
     impuestoUnico,
-    otrosDescuentos: 0,
-    totalDescuentos: totalDescuentos || afp + salud + afc + impuestoUnico,
+    otrosDescuentos,
+    totalDescuentos,
     liquidoAPagar,
+    rentaImponible: rentaImponible || totalHaberes || (sueldoBase + horasExtras + bonos),
     detalleHorasExtras,
     mes,
     anio,
+    nombreTrabajador,
+    rutTrabajador,
+    nombreEmpresa,
+    confianza,
   };
+}
+
+// ─── FUNCIONES AUXILIARES ───
+
+function extractValue(text: string, patterns: RegExp[]): number {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+  return 0;
+}
+
+function extractTableValue(text: string, label: string): number {
+  // Busca en formato tabla: "SUELDO $1.234.567"
+  const regex = new RegExp(
+    `(?:^|\\n)\\s*${label}[^\\$\\n]*\\$\\s*([\\d.,]+)`,
+    'im'
+  );
+  const match = text.match(regex);
+  if (match && match[1]) {
+    return parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+  }
+  return 0;
+}
+
+function detectAfp(text: string): string {
+  const afps = [
+    { nombre: 'Provida', patterns: ['provida', 'pro vida', 'prvida'] },
+    { nombre: 'Habitat', patterns: ['habitat'] },
+    { nombre: 'Cuprum', patterns: ['cuprum'] },
+    { nombre: 'Capital', patterns: ['capital'] },
+    { nombre: 'Modelo', patterns: ['modelo'] },
+    { nombre: 'PlanVital', patterns: ['plan vital', 'planvital'] },
+    { nombre: 'Uno', patterns: ['\\buno\\b'] },
+  ];
+  for (const afp of afps) {
+    for (const p of afp.patterns) {
+      if (new RegExp(p, 'i').test(text)) return afp.nombre;
+    }
+  }
+  return '';
+}
+
+function detectSalud(text: string): string {
+  const saludPatterns = [
+    { nombre: 'Fonasa', patterns: ['fonasa'] },
+    { nombre: 'Cruz Blanca', patterns: ['cruz blanca'] },
+    { nombre: 'Consalud', patterns: ['consalud'] },
+    { nombre: 'Banmedica', patterns: ['banmedica'] },
+    { nombre: 'Colmena', patterns: ['colmena'] },
+    { nombre: 'Masvida', patterns: ['masvida'] },
+    { nombre: 'Vidatres', patterns: ['vidatres'] },
+    { nombre: 'Espero', patterns: ['espero'] },
+  ];
+  for (const s of saludPatterns) {
+    for (const p of s.patterns) {
+      if (new RegExp(p, 'i').test(text)) return s.nombre;
+    }
+  }
+  return '';
+}
+
+function extractName(text: string, keywords: string[]): string | undefined {
+  for (const kw of keywords) {
+    const regex = new RegExp(
+      `${kw}[\\s:]+([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+(?:\\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+){1,4})`,
+      'i'
+    );
+    const match = text.match(regex);
+    if (match && match[1]) return match[1].trim();
+  }
+  return undefined;
+}
+
+function extractRut(text: string): string | undefined {
+  const match = text.match(/\b(\d{1,3}(?:\.\d{3})*-[\dkK])\b/);
+  if (match) return match[1];
+  const match2 = text.match(/\b(\d{7,8}-[\dkK])\b/);
+  if (match2) return match2[1];
+  return undefined;
+}
+
+function calcularConfianza(
+  sueldoBase: number,
+  liquido: number,
+  totalHaberes: number,
+  totalDescuentos: number
+): 'alta' | 'media' | 'baja' {
+  if (liquido <= 0 && totalHaberes <= 0) return 'baja';
+  if (liquido > 0 && sueldoBase > 0 && totalHaberes > 0) return 'alta';
+  if (liquido > 0) return 'media';
+  return 'baja';
 }
 
 /**
@@ -207,7 +427,6 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 /**
  * Extrae texto de una imagen usando Tesseract.js OCR.
- * Solo español para mejor precisión en liquidaciones chilenas.
  */
 export async function extractTextFromImage(file: File): Promise<string> {
   const Tesseract = await import('tesseract.js');
@@ -240,7 +459,7 @@ export async function parseLiquidacionFromFile(file: File): Promise<{
 
   console.log('[Parser] Texto extraído:', texto.slice(0, 500));
   const datos = parseLiquidacionText(texto);
-  console.log('[Parser] Datos parseados:', datos);
+  console.log('[Parser] Datos parseados:', JSON.stringify(datos, null, 2));
 
   return { datos, texto, tipo };
 }

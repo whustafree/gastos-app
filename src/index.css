@@ -70,3 +70,9 @@ body {
 .stagger-enter:nth-child(8) { animation-delay: 0.35s; }
 .stagger-enter:nth-child(9) { animation-delay: 0.4s; }
 .stagger-enter:nth-child(10) { animation-delay: 0.45s; }
+
+/* PullToRefresh spinner */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
