@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getLiquidaciones } from '../utils/storage';
 import { calcularValorHoraDesdeSueldo } from '../utils/reciboParser';
+import { parseCLP } from '../utils/format';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -75,7 +76,7 @@ export default function CalculadoraHorasExtras() {
     }
   };
 
-  const valorHoraNum = parseFloat(valorHora) || 0;
+  const valorHoraNum = parseCLP(valorHora);
   const recargoNum = parseFloat(recargo) || 50;
   const recargoMultiplicador = 1 + recargoNum / 100;
   const valorHoraExtra = valorHoraNum * recargoMultiplicador;

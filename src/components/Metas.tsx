@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { getMetas, addMeta, updateMetaAhorro, deleteMeta } from '../utils/storage';
+import { parseCLP } from '../utils/format';
 import { Plus, X, Trash2, Target, TrendingUp, Calendar, PiggyBank } from 'lucide-react';
 import PullToRefresh from './PullToRefresh';
 
@@ -18,7 +19,7 @@ export default function Metas() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const monto = parseFloat(montoObjetivo);
+    const monto = parseCLP(montoObjetivo);
     if (!nombre || isNaN(monto) || monto <= 0 || !fechaLimite) return;
 
     addMeta({
@@ -35,7 +36,7 @@ export default function Metas() {
   };
 
   const handleAportar = (id: string) => {
-    const monto = parseFloat(montoAporte);
+    const monto = parseCLP(montoAporte);
     if (isNaN(monto) || monto <= 0) return;
     updateMetaAhorro(id, Math.round(monto));
     setMontoAporte('');

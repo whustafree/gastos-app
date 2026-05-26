@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { getGastos, addGasto, deleteGasto, getGastosRecurrentes, addGastoRecurrente, deleteGastoRecurrente, updateGastoRecurrente } from '../utils/storage';
 import type { Gasto } from '../utils/storage';
 import { CATEGORIAS, getCategoria } from '../utils/categorias';
+import { parseCLP } from '../utils/format';
 import { Plus, X, Trash2, Search, Wallet, Repeat } from 'lucide-react';
 import PullToRefresh from './PullToRefresh';
 
@@ -58,7 +59,7 @@ export default function Gastos() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const montoNum = parseFloat(monto);
+    const montoNum = parseCLP(monto);
     if (isNaN(montoNum) || montoNum <= 0) return;
 
     addGasto({
@@ -82,7 +83,7 @@ export default function Gastos() {
   // ─── Gastos Recurrentes ───
   const handleAddRecurrente = (e: React.FormEvent) => {
     e.preventDefault();
-    const montoNum = parseFloat(recMonto);
+    const montoNum = parseCLP(recMonto);
     if (isNaN(montoNum) || montoNum <= 0) return;
 
     addGastoRecurrente({
