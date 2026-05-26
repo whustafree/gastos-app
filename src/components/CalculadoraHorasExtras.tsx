@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Clock, Plus, X, Trash2, Calculator, FileText, RefreshCw } from 'lucide-react';
+import { Clock, Plus, X, Trash2, Calculator, FileText, RefreshCw, DollarSign } from 'lucide-react';
 import { getLiquidaciones } from '../utils/storage';
+import { calcularValorHoraDesdeSueldo } from '../utils/reciboParser';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -10,6 +11,7 @@ const MESES = [
 export default function CalculadoraHorasExtras() {
   const [valorHora, setValorHora] = useState('');
   const [valorHoraDesdeLiq, setValorHoraDesdeLiq] = useState(false);
+  const [valorHoraDesdeSueldo, setValorHoraDesdeSueldo] = useState(false);
   const [entradas, setEntradas] = useState<{ horas: number; fecha: string; descripcion: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [horas, setHoras] = useState('');
@@ -18,6 +20,14 @@ export default function CalculadoraHorasExtras() {
 
   // Configuración
   const [recargo, setRecargo] = useState('50'); // 50% por defecto
+  const [horasPorDia, setHorasPorDia] = useState('7.5'); // 7.5 = jornada 45hrs/sem
+
+  // Última liquidación (con o sin HE)
+  const ultimaLiq = getLiquidaciones()
+    .sort((a, b) => {
+      if (a.anio !== b.anio) return b.anio - a.anio;
+      return b.mes - a.mes;
+    })[0];
 
   // Última liquidación con horas extras
   const ultimaLiqConHE = getLiquidaciones()
@@ -27,19 +37,44 @@ export default function CalculadoraHorasExtras() {
       return b.mes - a.mes;
     })[0];
 
-  // Auto-cargar valor hora desde la última liquidación al montar
+  // Auto-cargar valor hora: primero intentar desde detalleHorasExtras,
+  // si no, calcular desde sueldo base automáticamente
   useEffect(() => {
-    if (ultimaLiqConHE?.detalleHorasExtras?.valorHora && !valorHora) {
+    if (valorHora) return; // ya hay un valor
+    
+    if (ultimaLiqConHE?.detalleHorasExtras?.valorHora) {
       setValorHora(ultimaLiqConHE.detalleHorasExtras.valorHora.toString());
       setValorHoraDesdeLiq(true);
+    } else if (ultimaLiq?.sueldoBase && ultimaLiq.sueldoBase > 0) {
+      // Calcular desde sueldo base automáticamente
+      const hpd = parseFloat(horasPorDia) || 7.5;
+      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hpd);
+      if (calculado > 0) {
+        setValorHora(Math.round(calculado).toString());
+        setValorHoraDesdeSueldo(true);
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cargar valor hora desde la liquidación (manual)
+  // Cargar valor hora desde la liquidación (manual - desde detalle)
   const handleValorHoraFromLiq = () => {
     if (ultimaLiqConHE?.detalleHorasExtras?.valorHora) {
       setValorHora(ultimaLiqConHE.detalleHorasExtras.valorHora.toString());
       setValorHoraDesdeLiq(true);
+      setValorHoraDesdeSueldo(false);
+    }
+  };
+
+  // Calcular valor hora desde sueldo base (manual)
+  const handleCalcularDesdeSueldo = () => {
+    if (ultimaLiq?.sueldoBase && ultimaLiq.sueldoBase > 0) {
+      const hpd = parseFloat(horasPorDia) || 7.5;
+      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hpd);
+      if (calculado > 0) {
+        setValorHora(Math.round(calculado).toString());
+        setValorHoraDesdeSueldo(true);
+        setValorHoraDesdeLiq(false);
+      }
     }
   };
 

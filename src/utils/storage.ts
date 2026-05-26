@@ -355,4 +355,81 @@ export function descargarCSV(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// ─── Presupuestos por Categoría ───
+export interface Presupuesto {
+  id: string;
+  categoria: string;
+  montoLimite: number; // presupuesto mensual
+  mes: number;
+  anio: number;
+  createdAt: string;
+}
+
+export function getPresupuestos(mes?: number, anio?: number): Presupuesto[] {
+  const items = loadLocal<Presupuesto[]>('gastos-app-presupuestos', []);
+  if (mes && anio) {
+    return items.filter(p => p.mes === mes && p.anio === anio);
+  }
+  return items;
+}
+
+export function setPresupuesto(p: Omit<Presupuesto, 'id' | 'createdAt'>): Presupuesto[] {
+  const items = getPresupuestos();
+  // Reemplazar si ya existe para esta categoría/mes/año
+  const idx = items.findIndex(
+    i => i.categoria === p.categoria && i.mes === p.mes && i.anio === p.anio
+  );
+  if (idx >= 0) {
+    items[idx] = { ...items[idx]!, ...p, id: items[idx]!.id };
+  } else {
+    items.push({ ...p, id: generateId(), createdAt: new Date().toISOString() });
+  }
+  saveLocal('gastos-app-presupuestos', items);
+  return items;
+}
+
+export function deletePresupuesto(id: string): Presupuesto[] {
+  const items = getPresupuestos().filter(p => p.id !== id);
+  saveLocal('gastos-app-presupuestos', items);
+  return items;
+}
+
+/**
+ * Obtiene el estado de los presupuestos vs gastos reales del mes.
+ */
+export function getEstadoPresupuestos(mes: number, anio: number): {
+  categoria: string;
+  limite: number;
+  gastado: number;
+  porcentaje: number;
+  restante: number;
+  excedido: boolean;
+  alerta: boolean;
+}[] {
+  const presupuestos = getPresupuestos(mes, anio);
+  const gastos = getGastos().filter(g => {
+    const d = new Date(g.fecha);
+    return d.getMonth() + 1 === mes && d.getFullYear() === anio;
+  });
+
+  const gastadoPorCategoria: Record<string, number> = {};
+  for (const g of gastos) {
+    gastadoPorCategoria[g.categoria] = (gastadoPorCategoria[g.categoria] || 0) + g.monto;
+  }
+
+  return presupuestos.map(p => {
+    const gastado = gastadoPorCategoria[p.categoria] || 0;
+    const porcentaje = p.montoLimite > 0 ? (gastado / p.montoLimite) * 100 : 0;
+    return {
+      categoria: p.categoria,
+      limite: p.montoLimite,
+      gastado,
+      porcentaje,
+      restante: Math.max(0, p.montoLimite - gastado),
+      excedido: gastado > p.montoLimite,
+      alerta: porcentaje >= 80,
+    };
+  }).sort((a, b) => b.porcentaje - a.porcentaje);
+}
+
 export { generateId };

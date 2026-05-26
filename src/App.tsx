@@ -4,6 +4,7 @@ import Layout, { type Section } from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Gastos from './components/Gastos';
 import Metas from './components/Metas';
+import Presupuestos from './components/Presupuestos';
 import LiquidacionSueldo from './components/LiquidacionSueldo';
 import CalculadoraHorasExtras from './components/CalculadoraHorasExtras';
 import LoginPage from './components/LoginPage';
@@ -34,6 +35,7 @@ export default function App() {
       case 'dashboard': return <Dashboard />;
       case 'gastos': return <Gastos />;
       case 'metas': return <Metas />;
+      case 'presupuestos': return <Presupuestos />;
       case 'liquidacion': return <LiquidacionSueldo />;
       case 'horas-extras': return <CalculadoraHorasExtras />;
       default: return <Dashboard />;

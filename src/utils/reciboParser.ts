@@ -90,12 +90,18 @@ export function parseLiquidacionText(rawText: string): DatosLiquidacion {
   // Sueldo base también aparece como "Sueldo" en tablas simples
   const sueldoBaseAlt = !sueldoBase ? extractTableValue(text, 'sueldo') : 0;
 
-  // Horas extras — múltiples formatos
+  // Horas extras — múltiples formatos (MEJORADO: más patrones para distintas empresas chilenas)
   const horasExtras = extractValue(text, [
     /horas?\s*(?:extras?\s*)?(?:extraordinarias?\s*)?[^$]*?\$?\s*([\d.,]+)/i,
     /(?:hrs?|hras?)\s*(?:extras?|extraordinarias?)[^$]*?\$?\s*([\d.,]+)/i,
     /horas?\s*extra[s]?\s*(?:\.)?\s*\$?\s*([\d.,]+)/i,
     /horas?\s*extraodinarias?\s*\$?\s*([\d.,]+)/i,
+    // Formatos adicionales
+    /h\.?\s*extras?[^$]*?\$?\s*([\d.,]+)/i,
+    /he\s*[^$]*?\$?\s*([\d.,]+)/i,
+    /hrs?\s*extras?[^$\n]*?\b([\d.,]+)\b/i,
+    /(?:horas?|hrs?)\s*(?:extras?)?\s*(?:\.)?\s*([\d.,]+)/i,
+    /extras?[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
   // Bonos — múltiples tipos
@@ -236,21 +242,44 @@ export function parseLiquidacionText(rawText: string): DatosLiquidacion {
     /neto[^$]*?\$?\s*([\d.,]+)/i,
   ]);
 
-  // Detalle de horas extras
+  // Detalle de horas extras (MEJORADO: más patrones + calcular desde sueldo si no se detecta)
   let detalleHorasExtras: { cantidad: number; valorHora: number; total: number } | undefined;
   const hePatterns = [
-    /(\d+)\s*(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(?:x\s*)?\$?\s*([\d.,]+)/i,
-    /horas?\s*(?:extras?)?\s*(\d+)\s*(?:x\s*)?\$?\s*([\d.,]+)/i,
+    // Formato: "10 horas extras x $5.000"
+    /(\d+)\s*(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(?:x|por|@)?\s*\$?\s*([\d.,]+)/i,
+    // Formato: "Horas extras 10 $50.000" / "H.Extras 10 $50.000"
+    /horas?\s*(?:extras?)?\s*(\d+)\s*(?:x|por|@)?\s*\$?\s*([\d.,]+)/i,
+    // Formato: "H.E. 10 $50.000"
+    /h\.?\s*e\.?\s*(\d+)\s*\$?\s*([\d.,]+)/i,
+    // Formato: "HE 10 $50.000"
+    /\bhe\b\s*(\d+)\s*[^$]*?\$?\s*([\d.,]+)/i,
+    // Formato: tabular: "10 5000 50000" cerca de "extras"
+    /extras[^\n]*?(\d+)[^\n]*?(\d[\.\d,]*)/i,
   ];
+  
+  // Primero intentar con los patrones de detalle (cantidad × valorHora)
   for (const p of hePatterns) {
     const m = text.match(p);
-    if (m) {
+    if (m && m[1] && m[2]) {
       const cantidad = parseInt(m[1]);
       const valorHora = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
-      if (!isNaN(cantidad) && !isNaN(valorHora)) {
+      if (!isNaN(cantidad) && cantidad > 0 && !isNaN(valorHora) && valorHora > 0) {
         detalleHorasExtras = { cantidad, valorHora, total: cantidad * valorHora };
         break;
       }
+    }
+  }
+  
+  // Si no se pudo detectar el detalle pero hay horasExtras > 0 y sueldoBase > 0,
+  // calcular el valorHora desde el sueldo base (fórmula chilena)
+  if (!detalleHorasExtras && horasExtras > 0 && sueldoBase > 0) {
+    const valorHoraEstimado = calcularValorHoraDesdeSueldo(sueldoBase);
+    if (valorHoraEstimado > 0) {
+      detalleHorasExtras = {
+        cantidad: Math.round(horasExtras / (valorHoraEstimado * 1.5)),
+        valorHora: valorHoraEstimado,
+        total: horasExtras,
+      };
     }
   }
 
@@ -438,6 +467,23 @@ export async function extractTextFromImage(file: File): Promise<string> {
     },
   });
   return data.text;
+}
+
+/**
+ * Calcula el valor hora normal desde el sueldo base usando la fórmula chilena.
+ * 
+ * Fórmula: sueldoBase / 30 (días del mes) / horasPorDía
+ * 
+ * En Chile, la jornada ordinaria es de 45 horas semanales,
+ * lo que equivale a 7.5 horas por día (lunes a viernes) o 9 horas (lunes a viernes con sábado medio).
+ * 
+ * @param sueldoBase - Sueldo base mensual
+ * @param horasPorDia - Horas trabajadas por día (default: 7.5 para jornada 45hrs/sem)
+ * @returns Valor hora normal (sin recargo)
+ */
+export function calcularValorHoraDesdeSueldo(sueldoBase: number, horasPorDia: number = 7.5): number {
+  if (sueldoBase <= 0 || horasPorDia <= 0) return 0;
+  return sueldoBase / 30 / horasPorDia;
 }
 
 /**

@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Wallet, PiggyBank, FileText, Clock,
-  LogOut, Menu, X, User, Calculator,
+  LogOut, Menu, X, User, Calculator, ChartPie,
 } from 'lucide-react';
 
-export type Section = 'dashboard' | 'gastos' | 'metas' | 'liquidacion' | 'horas-extras';
+export type Section = 'dashboard' | 'gastos' | 'metas' | 'liquidacion' | 'horas-extras' | 'presupuestos';
 
 interface LayoutProps {
   section: Section;
@@ -17,6 +17,7 @@ const navItems: { id: Section; label: string; icon: typeof LayoutDashboard }[] =
   { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
   { id: 'gastos', label: 'Gastos', icon: Wallet },
   { id: 'metas', label: 'Metas', icon: PiggyBank },
+  { id: 'presupuestos', label: 'Presupuesto', icon: ChartPie },
   { id: 'liquidacion', label: 'Liquidación', icon: FileText },
   { id: 'horas-extras', label: 'Horas Extras', icon: Clock },
 ];
@@ -25,6 +26,7 @@ const categoriaIconos: Record<string, string> = {
   dashboard: '📊',
   gastos: '💰',
   metas: '🎯',
+  presupuestos: '📋',
   liquidacion: '📄',
   'horas-extras': '⏰',
 };
