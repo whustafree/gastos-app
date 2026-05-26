@@ -133,7 +133,55 @@ export interface LiquidacionSueldo {
 }
 
 export function getLiquidaciones(): LiquidacionSueldo[] {
-  return loadLocal<LiquidacionSueldo[]>('gastos-app-liquidaciones', []);
+  let liquidaciones = loadLocal<LiquidacionSueldo[]>('gastos-app-liquidaciones', []);
+  liquidaciones = migrarLiquidaciones(liquidaciones);
+  return liquidaciones;
+}
+
+/**
+ * Migración de datos antiguos: corrige sueldoBase almacenado con formato incorrecto.
+ *
+ * Antes de que existiera parseCLP(), algunos valores de sueldoBase se guardaron
+ * con el punto interpretado como decimal (ej: 543.034 en vez de 543034).
+ * Esta función detecta y corrige esos datos al cargarlos.
+ */
+function migrarLiquidaciones(liqs: LiquidacionSueldo[]): LiquidacionSueldo[] {
+  let modificado = false;
+  const resultado = liqs.map(liq => {
+    // Si sueldoBase no es entero, probablemente se almacenó con formato incorrecto
+    // (ej: 543.034 como float en vez de 543034 como entero)
+    if (liq.sueldoBase > 0 && !Number.isInteger(liq.sueldoBase)) {
+      const corregido = Math.round(liq.sueldoBase * 1000);
+      // Verificar que el valor corregido sea un salario chileno razonable
+      if (corregido >= 100000 && corregido <= 10000000) {
+        modificado = true;
+        return { ...liq, sueldoBase: corregido };
+      }
+    }
+    // También corregir detalleHorasExtras.valorHora si corresponde
+    if (liq.detalleHorasExtras?.valorHora && !Number.isInteger(liq.detalleHorasExtras.valorHora)) {
+      const corregido = Math.round(liq.detalleHorasExtras.valorHora * 1000);
+      // El total fue parseado correctamente (el parser limpia los puntos), 
+      // solo corregimos el valorHora
+      if (corregido >= 100 && corregido <= 100000) {
+        modificado = true;
+        return {
+          ...liq,
+          detalleHorasExtras: {
+            ...liq.detalleHorasExtras,
+            valorHora: corregido,
+          },
+        };
+      }
+    }
+    return liq;
+  });
+
+  if (modificado) {
+    saveLocal('gastos-app-liquidaciones', resultado);
+  }
+
+  return resultado;
 }
 
 export function addLiquidacion(liq: Omit<LiquidacionSueldo, 'id' | 'createdAt'>): LiquidacionSueldo[] {
