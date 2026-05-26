@@ -62,7 +62,7 @@ export default function Gastos() {
     if (isNaN(montoNum) || montoNum <= 0) return;
 
     addGasto({
-      monto: montoNum,
+      monto: Math.round(montoNum),
       categoria,
       tipo,
       descripcion: descripcion || getCategoria(categoria).label,
@@ -86,7 +86,7 @@ export default function Gastos() {
     if (isNaN(montoNum) || montoNum <= 0) return;
 
     addGastoRecurrente({
-      monto: montoNum,
+      monto: Math.round(montoNum),
       categoria: recCategoria,
       tipo: recTipo,
       descripcion: recDescripcion || getCategoria(recCategoria).label,

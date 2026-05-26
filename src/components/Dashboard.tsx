@@ -198,7 +198,7 @@ export default function Dashboard() {
                   </Pie>
                   <Tooltip
                     contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '12px' }}
-                    formatter={(value: any) => [`$${(typeof value === 'number' ? value : 0).toLocaleString('es-CL')}`, 'Total']}
+                    formatter={(value: any) => [`$${Math.round(typeof value === 'number' ? value : 0).toLocaleString('es-CL')}`, 'Total']}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -212,7 +212,7 @@ export default function Dashboard() {
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: catColor }} />
                     <span className="text-gray-400">{item.icon} {item.name}</span>
                   </div>
-                  <span style={{ color: catColor }} className="font-medium">${item.value.toLocaleString('es-CL')}</span>
+                  <span style={{ color: catColor }} className="font-medium">${Math.round(item.value).toLocaleString('es-CL')}</span>
                 </div>
                 );
               })}

@@ -91,7 +91,7 @@ export default function LiquidacionSueldo() {
 
     // También agregar como ingreso automáticamente
     addIngreso({
-      monto: resultado.liquidoAPagar,
+      monto: Math.round(resultado.liquidoAPagar),
       fuente: 'Sueldo',
       fecha: new Date(anio, mes - 1, 1).toISOString().split('T')[0]!,
       descripcion: `Sueldo ${MESES[mes - 1]} ${anio}`,
@@ -108,7 +108,7 @@ export default function LiquidacionSueldo() {
     setRefreshKey(k => k + 1);
   };
 
-  const formatCLP = (n: number) => n.toLocaleString('es-CL');
+  const formatCLP = (n: number) => Math.round(n).toLocaleString('es-CL');
 
   // Función para mostrar el formulario de horas extras
   const [showHECalculator, setShowHECalculator] = useState(false);
@@ -300,7 +300,7 @@ export default function LiquidacionSueldo() {
 }
 
 function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
-  const formatCLP = (n: number) => n.toLocaleString('es-CL');
+  const formatCLP = (n: number) => Math.round(n).toLocaleString('es-CL');
   return (
     <div className={`flex justify-between ${bold ? 'text-sm' : 'text-xs'}`}>
       <span className={bold ? 'text-white' : 'text-gray-500'}>{label}</span>

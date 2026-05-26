@@ -23,7 +23,7 @@ export default function Metas() {
 
     addMeta({
       nombre,
-      montoObjetivo: monto,
+      montoObjetivo: Math.round(monto),
       fechaLimite,
       color: COLORS[metas.length % COLORS.length],
     });
@@ -37,7 +37,7 @@ export default function Metas() {
   const handleAportar = (id: string) => {
     const monto = parseFloat(montoAporte);
     if (isNaN(monto) || monto <= 0) return;
-    updateMetaAhorro(id, monto);
+    updateMetaAhorro(id, Math.round(monto));
     setMontoAporte('');
     setShowAportar(null);
     setRefreshKey(k => k + 1);

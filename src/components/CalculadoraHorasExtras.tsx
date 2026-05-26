@@ -192,7 +192,7 @@ export default function CalculadoraHorasExtras() {
             <div className="bg-gray-900/60 rounded-xl p-4 border border-blue-800/20">
               <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Hora Normal</p>
               <p className="text-3xl font-bold text-white mb-2">
-                ${valorHoraNum.toLocaleString('es-CL')}
+                ${Math.round(valorHoraNum).toLocaleString('es-CL')}
                 <span className="text-sm text-gray-500 font-normal ml-1">/hora</span>
               </p>
               {sb > 0 && pasoDiario > 0 && (
@@ -202,7 +202,7 @@ export default function CalculadoraHorasExtras() {
                   <p>② <span className="text-blue-300">${pasoDiario.toLocaleString('es-CL')}</span> × 28 = <span className="text-blue-300">${paso28.toLocaleString('es-CL')}</span></p>
                   <p>③ <span className="text-blue-300">${paso28.toLocaleString('es-CL')}</span> ÷ {horasMensuales}h = <span className="text-blue-300">${vhCalculado.toLocaleString('es-CL')}</span></p>
                   {vhCalculado > 0 && vhCalculado !== valorHoraNum && (
-                    <p className="text-[9px] text-gray-600 mt-1">* Usando tu valor manual: ${valorHoraNum.toLocaleString('es-CL')}/h</p>
+                    <p className="text-[9px] text-gray-600 mt-1">* Usando tu valor manual: ${Math.round(valorHoraNum).toLocaleString('es-CL')}/h</p>
                   )}
                 </div>
               )}
@@ -223,7 +223,7 @@ export default function CalculadoraHorasExtras() {
               <div className="text-[10px] text-gray-500 space-y-0.5 bg-gray-800/50 rounded-lg p-2.5">
                 <p className="text-gray-400 font-medium mb-1">Fórmula: hora normal × (1 + {recargoNum}%)</p>
                 <p>
-                  <span className="text-blue-300">${valorHoraNum.toLocaleString('es-CL')}</span>
+                  <span className="text-blue-300">${Math.round(valorHoraNum).toLocaleString('es-CL')}</span>
                   {' '}×{' '}
                   <span className="text-orange-300">{recargoMultiplicador}</span>
                   {' '}= <span className="text-orange-400 font-semibold">${Math.round(valorHoraExtra).toLocaleString('es-CL')}</span>
@@ -268,7 +268,7 @@ export default function CalculadoraHorasExtras() {
             <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
               <p className="text-[10px] text-gray-500 mb-0.5">{mostrarValorExtra ? 'Valor Hora Extra' : 'Valor Hora Normal'}</p>
               <p className={`text-sm font-bold ${mostrarValorExtra ? 'text-orange-400' : 'text-blue-400'}`}>
-                ${(mostrarValorExtra
+                ${Math.round(mostrarValorExtra
                   ? ultimaLiqConHE.detalleHorasExtras.valorHora * recargoMultiplicador
                   : ultimaLiqConHE.detalleHorasExtras.valorHora
                 ).toLocaleString('es-CL')}
@@ -276,7 +276,7 @@ export default function CalculadoraHorasExtras() {
             </div>
             <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
               <p className="text-[10px] text-gray-500 mb-0.5">Total</p>
-              <p className="text-sm font-bold text-orange-400">${ultimaLiqConHE.detalleHorasExtras.total.toLocaleString('es-CL')}</p>
+              <p className="text-sm font-bold text-orange-400">${Math.round(ultimaLiqConHE.detalleHorasExtras.total).toLocaleString('es-CL')}</p>
             </div>
           </div>
         </div>
@@ -333,7 +333,7 @@ export default function CalculadoraHorasExtras() {
               <div className="flex items-center gap-3">
                 <div className="text-right">
                   <p className="text-sm font-semibold text-orange-400">{entry.horas}h</p>
-                  <p className="text-xs text-gray-500">${(entry.horas * valorHoraExtra).toLocaleString('es-CL')}</p>
+                  <p className="text-xs text-gray-500">${Math.round(entry.horas * valorHoraExtra).toLocaleString('es-CL')}</p>
                 </div>
                 <button onClick={() => handleDelete(i)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/10 transition-all">
                   <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -369,7 +369,7 @@ export default function CalculadoraHorasExtras() {
               <span className="text-gray-500">×</span>
               <span className="text-orange-400 font-bold text-2xl">${Math.round(valorHoraExtra).toLocaleString('es-CL')}</span>
               <span className="text-gray-500">=</span>
-              <span className="text-white font-bold text-3xl">${totalPagar.toLocaleString('es-CL')}</span>
+              <span className="text-white font-bold text-3xl">${Math.round(totalPagar).toLocaleString('es-CL')}</span>
             </div>
             <div className="text-[10px] text-gray-500 bg-gray-800/50 rounded-lg p-2.5 space-y-0.5">
               <p className="text-gray-400 font-medium mb-1">Desglose:</p>
@@ -381,14 +381,14 @@ export default function CalculadoraHorasExtras() {
               </p>
               <p className="border-t border-gray-700/50 pt-1 mt-1">
                 Total = {totalHoras}h × ${Math.round(valorHoraExtra).toLocaleString('es-CL')} ={' '}
-                <span className="text-orange-400 font-semibold">${totalPagar.toLocaleString('es-CL')}</span>
+                <span className="text-orange-400 font-semibold">${Math.round(totalPagar).toLocaleString('es-CL')}</span>
               </p>
             </div>
           </div>
 
           <div className="text-center">
             <p className="text-xs text-gray-500 mb-1">Total bruto a recibir</p>
-            <p className="text-3xl font-bold text-white">${totalPagar.toLocaleString('es-CL')}</p>
+            <p className="text-3xl font-bold text-white">${Math.round(totalPagar).toLocaleString('es-CL')}</p>
           </div>
         </div>
       )}
