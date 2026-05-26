@@ -1,21 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
-import { getGastos, addGasto, deleteGasto } from '../utils/storage';
+import { getGastos, addGasto, deleteGasto, getGastosRecurrentes, addGastoRecurrente, deleteGastoRecurrente, updateGastoRecurrente } from '../utils/storage';
 import type { Gasto } from '../utils/storage';
-import { Plus, X, Trash2, Search, Wallet, Filter } from 'lucide-react';
+import { CATEGORIAS, getCategoria } from '../utils/categorias';
+import { Plus, X, Trash2, Search, Wallet, Repeat } from 'lucide-react';
 import PullToRefresh from './PullToRefresh';
-
-const CATEGORIAS = [
-  { id: 'alimentacion', label: 'Alimentación', icon: '🍽️' },
-  { id: 'vivienda', label: 'Vivienda', icon: '🏠' },
-  { id: 'transporte', label: 'Transporte', icon: '🚗' },
-  { id: 'salud', label: 'Salud', icon: '💊' },
-  { id: 'educacion', label: 'Educación', icon: '📚' },
-  { id: 'entretencion', label: 'Entretención', icon: '🎮' },
-  { id: 'vestuario', label: 'Vestuario', icon: '👕' },
-  { id: 'servicios', label: 'Servicios', icon: '💡' },
-  { id: 'ahorro', label: 'Ahorro', icon: '🐷' },
-  { id: 'otros', label: 'Otros', icon: '📦' },
-];
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -30,6 +18,7 @@ export default function Gastos() {
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'personal' | 'familiar'>('todos');
   const [filtroMes, setFiltroMes] = useState(ahora.getMonth() + 1);
   const [filtroAnio, setFiltroAnio] = useState(ahora.getFullYear());
+  const [showRecurrentes, setShowRecurrentes] = useState(false);
 
   // Form state
   const [monto, setMonto] = useState('');
@@ -37,6 +26,16 @@ export default function Gastos() {
   const [tipo, setTipo] = useState<'personal' | 'familiar'>('personal');
   const [descripcion, setDescripcion] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+
+  // Form state para recurrentes
+  const [recMonto, setRecMonto] = useState('');
+  const [recCategoria, setRecCategoria] = useState('alimentacion');
+  const [recTipo, setRecTipo] = useState<'personal' | 'familiar'>('personal');
+  const [recDescripcion, setRecDescripcion] = useState('');
+  const [recDiaMes, setRecDiaMes] = useState('1');
+  const [showRecForm, setShowRecForm] = useState(false);
+
+  const recurrentes = useMemo(() => getGastosRecurrentes(), [refreshKey]);
 
   const gastos = useMemo(() => {
     const all = getGastos();
@@ -46,7 +45,7 @@ export default function Gastos() {
       const matchTipo = filtroTipo === 'todos' || g.tipo === filtroTipo;
       const matchSearch = !searchQuery ||
         g.descripcion.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        CATEGORIAS.find(c => c.id === g.categoria)?.label.toLowerCase().includes(searchQuery.toLowerCase());
+        getCategoria(g.categoria).label.toLowerCase().includes(searchQuery.toLowerCase());
       return matchMes && matchTipo && matchSearch;
     }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }, [refreshKey, filtroMes, filtroAnio, filtroTipo, searchQuery]);
@@ -62,7 +61,7 @@ export default function Gastos() {
       monto: montoNum,
       categoria,
       tipo,
-      descripcion: descripcion || CATEGORIAS.find(c => c.id === categoria)?.label || 'Gasto',
+      descripcion: descripcion || getCategoria(categoria).label,
       fecha,
     });
     setMonto('');
@@ -73,6 +72,35 @@ export default function Gastos() {
 
   const handleDelete = (id: string) => {
     deleteGasto(id);
+    setRefreshKey(k => k + 1);
+  };
+
+  // ─── Gastos Recurrentes ───
+  const handleAddRecurrente = (e: React.FormEvent) => {
+    e.preventDefault();
+    const montoNum = parseFloat(recMonto);
+    if (isNaN(montoNum) || montoNum <= 0) return;
+
+    addGastoRecurrente({
+      monto: montoNum,
+      categoria: recCategoria,
+      tipo: recTipo,
+      descripcion: recDescripcion || getCategoria(recCategoria).label,
+      diaMes: parseInt(recDiaMes) || 1,
+    });
+    setRecMonto('');
+    setRecDescripcion('');
+    setShowRecForm(false);
+    setRefreshKey(k => k + 1);
+  };
+
+  const handleDeleteRecurrente = (id: string) => {
+    deleteGastoRecurrente(id);
+    setRefreshKey(k => k + 1);
+  };
+
+  const handleToggleRecurrente = (id: string, activo: boolean) => {
+    updateGastoRecurrente(id, { activo });
     setRefreshKey(k => k + 1);
   };
 
@@ -90,6 +118,7 @@ export default function Gastos() {
   }, []);
 
   return (
+    <>
     <PullToRefresh onRefresh={handleRefresh}>
     <div className="space-y-4">
       {/* Header */}
@@ -100,13 +129,25 @@ export default function Gastos() {
             {MESES[filtroMes - 1]} {filtroAnio} — Total: <span className="text-white font-semibold">${totalGastos.toLocaleString('es-CL')}</span>
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-sm hover:from-blue-700 hover:to-indigo-700 transition-all active:scale-95 shadow-lg shadow-blue-900/50"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowRecurrentes(!showRecurrentes); setShowForm(false); }}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 ${
+              showRecurrentes ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+            title="Gastos recurrentes"
+          >
+            <Repeat className="w-4 h-4" />
+            <span className="hidden sm:inline">Suscripciones</span>
+          </button>
+          <button
+            onClick={() => { setShowForm(true); setShowRecurrentes(false); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-sm hover:from-blue-700 hover:to-indigo-700 transition-all active:scale-95 shadow-lg shadow-blue-900/50"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -193,22 +234,22 @@ export default function Gastos() {
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-2">Categoría</label>
-            <div className="grid grid-cols-5 gap-2">
-              {CATEGORIAS.map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoria(c.id)}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
-                    categoria === c.id
-                      ? 'bg-blue-600/20 border border-blue-500/50'
-                      : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="text-lg">{c.icon}</span>
-                  <span className="text-[10px] text-gray-400">{c.label.split(' ')[0]}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-5 gap-2">              {CATEGORIAS.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategoria(c.id)}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                      categoria === c.id
+                        ? 'border'
+                        : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'
+                    }`}
+                    style={categoria === c.id ? { backgroundColor: c.colorBg, borderColor: c.color } : {}}
+                  >
+                    <span className="text-lg">{c.icon}</span>
+                    <span className="text-[10px] text-gray-400">{c.label.split(' ')[0]}</span>
+                  </button>
+                ))}
             </div>
           </div>
 
@@ -260,19 +301,18 @@ export default function Gastos() {
       {/* Lista de gastos */}
       {Object.entries(gastosPorCategoria).length > 0 ? (
         Object.entries(gastosPorCategoria).map(([catId, items]) => {
-          const cat = CATEGORIAS.find(c => c.id === catId);
+          const cat = getCategoria(catId);
           const subtotal = items.reduce((s, g) => s + g.monto, 0);
-          return (
-            <div key={catId}>
+          return (              <div key={catId}>
               <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {cat?.icon} {cat?.label}
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: cat.color }}>
+                  {cat.icon} {cat.label}
                 </span>
-                <span className="text-xs text-gray-400 font-medium">${subtotal.toLocaleString('es-CL')}</span>
+                <span className="text-xs font-medium" style={{ color: cat.color }}>${subtotal.toLocaleString('es-CL')}</span>
               </div>
               <div className="space-y-1">
                 {items.map(g => (
-                  <div key={g.id} className="stagger-enter flex items-center justify-between bg-gray-900 rounded-xl px-4 py-3 border border-gray-800/50 hover:border-gray-700/50 transition-colors group">
+                  <div key={g.id} className="stagger-enter flex items-center justify-between rounded-xl px-4 py-3 border border-gray-800/50 hover:border-gray-700/50 transition-colors group" style={{ backgroundColor: cat.colorBg }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -319,5 +359,130 @@ export default function Gastos() {
       )}
     </div>
     </PullToRefresh>
+
+      {/* Sección de Gastos Recurrentes - Modal */}
+      {showRecurrentes && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setShowRecurrentes(false)}>
+          <div className="fixed inset-0 bg-black/60" />
+          <div
+            className="relative w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-gray-900 rounded-t-2xl sm:rounded-2xl p-5 border border-gray-800 animate-fade-in-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Repeat className="w-4 h-4 text-purple-400" />
+                Gastos Recurrentes
+              </h3>
+              <button onClick={() => setShowRecurrentes(false)} className="p-1 rounded-lg hover:bg-gray-800">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 mb-4">
+              Estos gastos se agregan automáticamente cada mes (suscripciones, arriendo, cuentas fijas).
+            </p>
+
+            {/* Lista de recurrentes */}
+            {recurrentes.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {recurrentes.map(r => {
+                  const cat = getCategoria(r.categoria);
+                  return (
+                    <div key={r.id} className="flex items-center justify-between bg-gray-800/50 rounded-xl px-4 py-3 border border-gray-700/50 group">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span style={{ color: cat.color }}>{cat.icon}</span>
+                          <p className="text-sm font-medium text-white truncate">{r.descripcion}</p>
+                        </div>
+                        <p className="text-xs text-gray-500">Día {r.diaMes} · ${r.monto.toLocaleString('es-CL')}/mes</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleRecurrente(r.id, !r.activo)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                            r.activo ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700/50 text-gray-500'
+                          }`}
+                        >
+                          {r.activo ? 'Activo' : 'Pausado'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRecurrente(r.id)}
+                          className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/10 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {recurrentes.length === 0 && !showRecForm && (
+              <div className="text-center py-6">
+                <p className="text-sm text-gray-500">No tienes gastos recurrentes configurados.</p>
+              </div>
+            )}
+
+            {/* Formulario nuevo recurrente */}
+            {showRecForm ? (
+              <form onSubmit={handleAddRecurrente} className="space-y-3 border-t border-gray-800 pt-4">
+                <h4 className="text-xs font-semibold text-gray-400">Nuevo gasto recurrente</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Monto ($)</label>
+                    <input type="number" value={recMonto} onChange={e => setRecMonto(e.target.value)} placeholder="19990" required className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Día del mes</label>
+                    <input type="number" value={recDiaMes} onChange={e => setRecDiaMes(e.target.value)} placeholder="1" min={1} max={28} required className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Categoría</label>
+                  <div className="flex gap-1 overflow-x-auto pb-1">
+                    {CATEGORIAS.map(c => (
+                      <button key={c.id} type="button" onClick={() => setRecCategoria(c.id)}
+                        className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl text-[10px] transition-all ${recCategoria === c.id ? 'border' : 'bg-gray-800 border border-gray-700'}`}
+                        style={recCategoria === c.id ? { backgroundColor: c.colorBg, borderColor: c.color, color: c.color } : { color: '#9ca3af' }}
+                      >
+                        <span>{c.icon}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">Descripción</label>
+                    <input type="text" value={recDescripcion} onChange={e => setRecDescripcion(e.target.value)} placeholder="Ej: Netflix" className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+                    <div className="flex gap-1 bg-gray-800 rounded-xl p-1">
+                      <button type="button" onClick={() => setRecTipo('personal')} className={`px-3 py-2 rounded-lg text-xs font-medium ${recTipo === 'personal' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Personal</button>
+                      <button type="button" onClick={() => setRecTipo('familiar')} className={`px-3 py-2 rounded-lg text-xs font-medium ${recTipo === 'familiar' ? 'bg-green-600 text-white' : 'text-gray-400'}`}>Familiar</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold text-sm hover:from-purple-700 hover:to-pink-700 transition-all active:scale-95">
+                    Agregar Suscripción
+                  </button>
+                  <button type="button" onClick={() => setShowRecForm(false)} className="px-4 py-2.5 rounded-xl bg-gray-800 text-gray-400 text-sm hover:bg-gray-700">Cancelar</button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowRecForm(true)}
+                className="w-full py-2.5 rounded-xl bg-purple-600/20 text-purple-400 text-sm font-medium hover:bg-purple-600/30 transition-all border border-purple-800/30 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Agregar Suscripción
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

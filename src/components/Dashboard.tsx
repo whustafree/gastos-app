@@ -1,19 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
-import { getGastos, getIngresos, getMetas, getLiquidaciones, type ResumenMensual } from '../utils/storage';
-import { TrendingUp, TrendingDown, DollarSign, PiggyBank, Wallet, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { getGastos, getIngresos, getMetas, getLiquidaciones, autoAgregarRecurrentes, exportCompletoCSV, descargarCSV } from '../utils/storage';
+import { CATEGORIA_COLORS, getCategoria } from '../utils/categorias';
+import { TrendingUp, TrendingDown, PiggyBank, Wallet, Target, ArrowUpRight, ArrowDownRight, Download } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-
-const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
-const CATEGORIA_LABELS: Record<string, string> = {
-  alimentacion: 'Alimentación', vivienda: 'Vivienda', transporte: 'Transporte',
-  salud: 'Salud', educacion: 'Educación', entretencion: 'Entretención',
-  vestuario: 'Vestuario', servicios: 'Servicios', ahorro: 'Ahorro', otros: 'Otros',
-};
-const CATEGORIA_ICONS: Record<string, string> = {
-  alimentacion: '🍽️', vivienda: '🏠', transporte: '🚗', salud: '💊',
-  educacion: '📚', entretencion: '🎮', vestuario: '👕', servicios: '💡',
-  ahorro: '🐷', otros: '📦',
-};
 
 export default function Dashboard() {
   const ahora = new Date();
@@ -21,8 +10,11 @@ export default function Dashboard() {
   const anioActual = ahora.getFullYear();
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Refresh cuando el componente se monta
-  useEffect(() => { setRefreshKey(k => k + 1); }, []);
+  // Auto-agregar gastos recurrentes y refrescar al montar
+  useEffect(() => {
+    autoAgregarRecurrentes();
+    setRefreshKey(k => k + 1);
+  }, []);
 
   const resumen = useMemo(() => {
     const gastos = getGastos().filter(g => {
@@ -55,7 +47,7 @@ export default function Dashboard() {
   const pieData = useMemo(() =>
     Object.entries(resumen.gastosPorCategoria)
       .filter(([, v]) => v > 0)
-      .map(([k, v]) => ({ name: CATEGORIA_LABELS[k] || k, value: v, icon: CATEGORIA_ICONS[k] || '📦' })),
+      .map(([k, v]) => ({ name: getCategoria(k).label, value: v, icon: getCategoria(k).icon, catId: k })),
     [resumen.gastosPorCategoria]
   );
 
@@ -102,11 +94,24 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       {/* Saludo y fecha */}
-      <div>
-        <h2 className="text-xl font-bold text-white">Resumen del Mes</h2>
-        <p className="text-sm text-gray-500">
-          {ahora.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">Resumen del Mes</h2>
+          <p className="text-sm text-gray-500">
+            {ahora.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            const csv = exportCompletoCSV();
+            descargarCSV(csv, `gastosapp-export-${anioActual}-${String(mesActual).padStart(2, '0')}.csv`);
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-800 text-gray-400 text-sm font-medium hover:bg-gray-700 hover:text-white transition-all active:scale-95"
+          title="Exportar datos del mes"
+        >
+          <Download className="w-4 h-4" />
+          <span className="hidden sm:inline">Exportar</span>
+        </button>
       </div>
 
       {/* Cards de resumen */}
@@ -188,7 +193,7 @@ export default function Dashboard() {
                     dataKey="value"
                   >
                     {pieData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      <Cell key={i} fill={CATEGORIA_COLORS[i % CATEGORIA_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -199,15 +204,18 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
             <div className="flex-1 space-y-2 w-full">
-              {pieData.map((item, i) => (
+              {pieData.map((item, i) => {
+                const catColor = CATEGORIA_COLORS[i % CATEGORIA_COLORS.length];
+                return (
                 <div key={item.name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: catColor }} />
                     <span className="text-gray-400">{item.icon} {item.name}</span>
                   </div>
-                  <span className="text-white font-medium">${item.value.toLocaleString('es-CL')}</span>
+                  <span style={{ color: catColor }} className="font-medium">${item.value.toLocaleString('es-CL')}</span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
