@@ -20,7 +20,7 @@ export default function CalculadoraHorasExtras() {
 
   // Configuración
   const [recargo, setRecargo] = useState('50'); // 50% por defecto
-  const [horasPorDia, setHorasPorDia] = useState('7.5'); // 7.5 = jornada 45hrs/sem
+  const [horasSemanales, setHorasSemanales] = useState('44'); // 44h = jornada completa estándar
 
   // Última liquidación (con o sin HE)
   const ultimaLiq = getLiquidaciones()
@@ -46,9 +46,9 @@ export default function CalculadoraHorasExtras() {
       setValorHora(ultimaLiqConHE.detalleHorasExtras.valorHora.toString());
       setValorHoraDesdeLiq(true);
     } else if (ultimaLiq?.sueldoBase && ultimaLiq.sueldoBase > 0) {
-      // Calcular desde sueldo base automáticamente
-      const hpd = parseFloat(horasPorDia) || 7.5;
-      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hpd);
+      // Calcular desde sueldo base (fórmula chilena)
+      const hs = parseFloat(horasSemanales) || 44;
+      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hs);
       if (calculado > 0) {
         setValorHora(Math.round(calculado).toString());
         setValorHoraDesdeSueldo(true);
@@ -68,8 +68,8 @@ export default function CalculadoraHorasExtras() {
   // Calcular valor hora desde sueldo base (manual)
   const handleCalcularDesdeSueldo = () => {
     if (ultimaLiq?.sueldoBase && ultimaLiq.sueldoBase > 0) {
-      const hpd = parseFloat(horasPorDia) || 7.5;
-      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hpd);
+      const hs = parseFloat(horasSemanales) || 44;
+      const calculado = calcularValorHoraDesdeSueldo(ultimaLiq.sueldoBase, hs);
       if (calculado > 0) {
         setValorHora(Math.round(calculado).toString());
         setValorHoraDesdeSueldo(true);
@@ -126,16 +126,33 @@ export default function CalculadoraHorasExtras() {
               min={0}
               className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-lg font-bold placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
             />
-            <button
-              onClick={handleValorHoraFromLiq}
-              className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
-            >
-              <RefreshCw className="w-2.5 h-2.5" />
-              Cargar desde última liquidación
-            </button>
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              <button
+                onClick={handleValorHoraFromLiq}
+                className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                title="Cargar desde detalle de HH.EE. de la liquidación"
+              >
+                <RefreshCw className="w-2.5 h-2.5" />
+                Desde liquidación
+              </button>
+              <span className="text-[10px] text-gray-600">|</span>
+              <button
+                onClick={handleCalcularDesdeSueldo}
+                className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                title="Calcular desde sueldo base (fórmula chilena)"
+              >
+                <DollarSign className="w-2.5 h-2.5" />
+                Desde sueldo base
+              </button>
+            </div>
             {valorHoraDesdeLiq && (
               <span className="mt-0.5 text-[10px] text-emerald-400 flex items-center gap-1">
                 ✓ Auto-cargado desde liquidación
+              </span>
+            )}
+            {valorHoraDesdeSueldo && (
+              <span className="mt-0.5 text-[10px] text-emerald-400 flex items-center gap-1">
+                ✓ Calculado desde sueldo base (fórmula chilena)
               </span>
             )}
           </div>
@@ -148,18 +165,20 @@ export default function CalculadoraHorasExtras() {
               placeholder="50"
               min={0}
               className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-lg font-bold placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <p className="mt-1 text-[10px] text-gray-500">
+            />              <p className="mt-1 text-[10px] text-gray-500">
               En Chile, las horas extras tienen un recargo mínimo del 50%
             </p>
           </div>
         </div>
         {valorHoraNum > 0 && (
-          <div className="bg-blue-600/10 border border-blue-800/30 rounded-xl p-3">
+          <div className="bg-blue-600/10 border border-blue-800/30 rounded-xl p-3 space-y-1">
             <p className="text-xs text-gray-400">
               Valor hora extra:{' '}
               <span className="text-blue-400 font-bold text-sm">${valorHoraExtra.toLocaleString('es-CL')}</span>
               {' '}({valorHoraNum.toLocaleString('es-CL')} + {recargoNum}%)
+            </p>
+            <p className="text-[10px] text-gray-500">
+              Fórmula: sueldoBase / 30 × 28 / {parseFloat(horasSemanales) * 4}h = valor hora
             </p>
           </div>
         )}

@@ -470,20 +470,29 @@ export async function extractTextFromImage(file: File): Promise<string> {
 }
 
 /**
- * Calcula el valor hora normal desde el sueldo base usando la fórmula chilena.
- * 
- * Fórmula: sueldoBase / 30 (días del mes) / horasPorDía
- * 
- * En Chile, la jornada ordinaria es de 45 horas semanales,
- * lo que equivale a 7.5 horas por día (lunes a viernes) o 9 horas (lunes a viernes con sábado medio).
- * 
+ * Calcula el valor hora normal desde el sueldo base usando la fórmula legal chilena.
+ *
+ * Fórmula:
+ *   valor día     = sueldoBase / 30
+ *   valor mes     = valor día × 28 (días hábiles promedio)
+ *   horasMensuales = horasSemanales × 4
+ *   valor hora    = valor mes / horasMensuales
+ *
+ * Ejemplo (jornada 44h/sem):
+ *   $543.034 / 30 = $18.101,13 (valor día)
+ *   $18.101,13 × 28 = $506.831,64 (valor mes ajustado)
+ *   $506.831,64 / 176h = $2.879,72 → valor hora normal
+ *   $2.879,72 × 1,5 (50% recargo) = $4.319,58 → valor hora extra
+ *
  * @param sueldoBase - Sueldo base mensual
- * @param horasPorDia - Horas trabajadas por día (default: 7.5 para jornada 45hrs/sem)
+ * @param horasSemanales - Horas de la jornada semanal (default: 44 para jornada completa estándar)
  * @returns Valor hora normal (sin recargo)
  */
-export function calcularValorHoraDesdeSueldo(sueldoBase: number, horasPorDia: number = 7.5): number {
-  if (sueldoBase <= 0 || horasPorDia <= 0) return 0;
-  return sueldoBase / 30 / horasPorDia;
+export function calcularValorHoraDesdeSueldo(sueldoBase: number, horasSemanales: number = 44): number {
+  if (sueldoBase <= 0 || horasSemanales <= 0) return 0;
+  // Fórmula chilena: sueldoBase / 30 (días) * 28 (días hábiles) / (horasSemanales * 4)
+  const horasMensuales = horasSemanales * 4;
+  return (sueldoBase / 30) * 28 / horasMensuales;
 }
 
 /**
