@@ -115,8 +115,8 @@ export default function CalculadoraHorasExtras() {
           <Calculator className="w-4 h-4 text-blue-400" />
           Configuración
         </h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="lg:col-span-2">
             <label className="block text-xs font-medium text-gray-500 mb-1">Valor hora normal ($)</label>
             <input
               type="number"
@@ -157,6 +157,22 @@ export default function CalculadoraHorasExtras() {
             )}
           </div>
           <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Jornada</label>
+            <select
+              value={horasSemanales}
+              onChange={e => { setHorasSemanales(e.target.value); setValorHoraDesdeSueldo(false); }}
+              className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-lg font-bold focus:outline-none focus:border-blue-500 transition-colors"
+            >
+              <option value="44">44h (actual)</option>
+              <option value="42">42h (próximamente)</option>
+              <option value="40">40h</option>
+              <option value="45">45h</option>
+            </select>
+            <p className="mt-1 text-[10px] text-gray-500">
+              {parseFloat(horasSemanales) * 4}h mensuales · {parseFloat(horasSemanales) > 0 ? 'Jornada ' + horasSemanales + 'h/sem' : ''}
+            </p>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Recargo (%)</label>
             <input
               type="number"
@@ -165,21 +181,37 @@ export default function CalculadoraHorasExtras() {
               placeholder="50"
               min={0}
               className="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-lg font-bold placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-            />              <p className="mt-1 text-[10px] text-gray-500">
-              En Chile, las horas extras tienen un recargo mínimo del 50%
+            />
+            <p className="mt-1 text-[10px] text-gray-500">
+              En Chile, recargo mínimo del 50%
             </p>
           </div>
         </div>
         {valorHoraNum > 0 && (
-          <div className="bg-blue-600/10 border border-blue-800/30 rounded-xl p-3 space-y-1">
+          <div className="bg-blue-600/10 border border-blue-800/30 rounded-xl p-3 space-y-1.5">
             <p className="text-xs text-gray-400">
               Valor hora extra:{' '}
               <span className="text-blue-400 font-bold text-sm">${valorHoraExtra.toLocaleString('es-CL')}</span>
               {' '}({valorHoraNum.toLocaleString('es-CL')} + {recargoNum}%)
             </p>
-            <p className="text-[10px] text-gray-500">
-              Fórmula: sueldoBase / 30 × 28 / {parseFloat(horasSemanales) * 4}h = valor hora
-            </p>
+            <div className="text-[10px] text-gray-500 space-y-0.5 border-t border-blue-800/30 pt-1.5 mt-1">
+              <p className="text-gray-400 font-medium">📐 Cálculo paso a paso:</p>
+              {(() => {
+                const hs = parseFloat(horasSemanales) || 44;
+                const hm = hs * 4;
+                const sb = ultimaLiq?.sueldoBase || 0;
+                const diario = Math.round(sb / 30);
+                const x28 = Math.round(diario * 28);
+                const vh = Math.round(x28 / hm);
+                const vhe = Math.round(vh * (1 + recargoNum / 100));
+                return (<>
+                  <p>① sueldoBase ÷ 30 = <span className="text-blue-300">${sb.toLocaleString('es-CL')} / 30 = ${diario.toLocaleString('es-CL')}</span></p>
+                  <p>② × 28 = <span className="text-blue-300">${diario.toLocaleString('es-CL')} × 28 = ${x28.toLocaleString('es-CL')}</span></p>
+                  <p>③ ÷ horasMensuales ({hs}h × 4 = {hm}h) = <span className="text-blue-300">${x28.toLocaleString('es-CL')} / {hm} = ${vh.toLocaleString('es-CL')}</span></p>
+                  <p>④ × recargo ({recargoNum}%) = <span className="text-orange-400 font-semibold">${vh.toLocaleString('es-CL')} × 1.{recargoNum} = ${vhe.toLocaleString('es-CL')}</span></p>
+                </>);
+              })()}
+            </div>
           </div>
         )}
       </div>

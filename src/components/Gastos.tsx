@@ -27,9 +27,13 @@ export default function Gastos() {
   const [descripcion, setDescripcion] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
 
+  // Subcategorías (formulario principal)
+  const subcategorias = useMemo(() => getCategoria(categoria).subcategorias, [categoria]);
+
   // Form state para recurrentes
   const [recMonto, setRecMonto] = useState('');
   const [recCategoria, setRecCategoria] = useState('alimentacion');
+  const recSubcategorias = useMemo(() => getCategoria(recCategoria).subcategorias, [recCategoria]);
   const [recTipo, setRecTipo] = useState<'personal' | 'familiar'>('personal');
   const [recDescripcion, setRecDescripcion] = useState('');
   const [recDiaMes, setRecDiaMes] = useState('1');
@@ -238,7 +242,7 @@ export default function Gastos() {
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => setCategoria(c.id)}
+                    onClick={() => { setCategoria(c.id); setDescripcion(''); }}
                     className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
                       categoria === c.id
                         ? 'border'
@@ -251,6 +255,27 @@ export default function Gastos() {
                   </button>
                 ))}
             </div>
+            {/* Subcategorías */}
+            {subcategorias && subcategorias.length > 0 && (
+              <div className="mt-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {subcategorias.map(sub => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setDescripcion(sub.label)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        descripcion === sub.label
+                          ? 'bg-blue-600/20 text-blue-400 border border-blue-700/50'
+                          : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700/50'
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -442,7 +467,7 @@ export default function Gastos() {
                   <label className="block text-xs text-gray-500 mb-1">Categoría</label>
                   <div className="flex gap-1 overflow-x-auto pb-1">
                     {CATEGORIAS.map(c => (
-                      <button key={c.id} type="button" onClick={() => setRecCategoria(c.id)}
+                      <button key={c.id} type="button" onClick={() => { setRecCategoria(c.id); setRecDescripcion(''); }}
                         className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl text-[10px] transition-all ${recCategoria === c.id ? 'border' : 'bg-gray-800 border border-gray-700'}`}
                         style={recCategoria === c.id ? { backgroundColor: c.colorBg, borderColor: c.color, color: c.color } : { color: '#9ca3af' }}
                       >
@@ -450,6 +475,25 @@ export default function Gastos() {
                       </button>
                     ))}
                   </div>
+                  {/* Subcategorías */}
+                  {recSubcategorias && recSubcategorias.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {recSubcategorias.map(sub => (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => setRecDescripcion(sub.label)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                            recDescripcion === sub.label
+                              ? 'bg-purple-600/20 text-purple-400 border border-purple-700/50'
+                              : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700/50'
+                          }`}
+                        >
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1">
