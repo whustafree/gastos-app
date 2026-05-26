@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import { Clock, Plus, X, Trash2, Calculator } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, Plus, X, Trash2, Calculator, FileText, RefreshCw } from 'lucide-react';
+import { getLiquidaciones } from '../utils/storage';
+
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
 
 export default function CalculadoraHorasExtras() {
   const [valorHora, setValorHora] = useState('');
-  const [valorHoraStr, setValorHoraStr] = useState('');
+  const [valorHoraDesdeLiq, setValorHoraDesdeLiq] = useState(false);
   const [entradas, setEntradas] = useState<{ horas: number; fecha: string; descripcion: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [horas, setHoras] = useState('');
@@ -13,15 +19,28 @@ export default function CalculadoraHorasExtras() {
   // Configuración
   const [recargo, setRecargo] = useState('50'); // 50% por defecto
 
-  // Cargar valor hora desde la liquidación si está disponible
+  // Última liquidación con horas extras
+  const ultimaLiqConHE = getLiquidaciones()
+    .filter(l => l.detalleHorasExtras && l.detalleHorasExtras.valorHora > 0)
+    .sort((a, b) => {
+      if (a.anio !== b.anio) return b.anio - a.anio;
+      return b.mes - a.mes;
+    })[0];
+
+  // Auto-cargar valor hora desde la última liquidación al montar
+  useEffect(() => {
+    if (ultimaLiqConHE?.detalleHorasExtras?.valorHora && !valorHora) {
+      setValorHora(ultimaLiqConHE.detalleHorasExtras.valorHora.toString());
+      setValorHoraDesdeLiq(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cargar valor hora desde la liquidación (manual)
   const handleValorHoraFromLiq = () => {
-    try {
-      const liquidaciones = JSON.parse(localStorage.getItem('gastos-app-liquidaciones') || '[]');
-      const ultima = liquidaciones[liquidaciones.length - 1];
-      if (ultima?.detalleHorasExtras?.valorHora) {
-        setValorHora(ultima.detalleHorasExtras.valorHora.toString());
-      }
-    } catch {}
+    if (ultimaLiqConHE?.detalleHorasExtras?.valorHora) {
+      setValorHora(ultimaLiqConHE.detalleHorasExtras.valorHora.toString());
+      setValorHoraDesdeLiq(true);
+    }
   };
 
   const valorHoraNum = parseFloat(valorHora) || 0;
@@ -74,10 +93,16 @@ export default function CalculadoraHorasExtras() {
             />
             <button
               onClick={handleValorHoraFromLiq}
-              className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+              className="mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
             >
-              📄 Cargar desde última liquidación
+              <RefreshCw className="w-2.5 h-2.5" />
+              Cargar desde última liquidación
             </button>
+            {valorHoraDesdeLiq && (
+              <span className="mt-0.5 text-[10px] text-emerald-400 flex items-center gap-1">
+                ✓ Auto-cargado desde liquidación
+              </span>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Recargo (%)</label>
@@ -104,6 +129,41 @@ export default function CalculadoraHorasExtras() {
           </div>
         )}
       </div>
+
+      {/* Resumen de horas extras desde la última liquidación */}
+      {ultimaLiqConHE?.detalleHorasExtras && (
+        <div className="bg-gradient-to-r from-blue-600/10 to-indigo-900/10 border border-blue-800/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-400" />
+              <h3 className="text-sm font-semibold text-white">HH.EE. desde Liquidación</h3>
+            </div>
+            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-1 rounded-lg">
+              {MESES[ultimaLiqConHE.mes - 1]} {ultimaLiqConHE.anio}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
+              <p className="text-[10px] text-gray-500 mb-0.5">Cantidad</p>
+              <p className="text-sm font-bold text-white">
+                {ultimaLiqConHE.detalleHorasExtras.cantidad}h
+              </p>
+            </div>
+            <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
+              <p className="text-[10px] text-gray-500 mb-0.5">Valor Hora</p>
+              <p className="text-sm font-bold text-blue-400">
+                ${ultimaLiqConHE.detalleHorasExtras.valorHora.toLocaleString('es-CL')}
+              </p>
+            </div>
+            <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
+              <p className="text-[10px] text-gray-500 mb-0.5">Total</p>
+              <p className="text-sm font-bold text-orange-400">
+                ${ultimaLiqConHE.detalleHorasExtras.total.toLocaleString('es-CL')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Agregar horas */}
       <div className="flex items-center justify-between">
