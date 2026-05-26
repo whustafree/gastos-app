@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Plus, X, Trash2, Calculator, FileText, RefreshCw, DollarSign } from 'lucide-react';
+import { Clock, Plus, X, Trash2, Calculator, FileText, RefreshCw, DollarSign, ToggleLeft, ToggleRight } from 'lucide-react';
 import { getLiquidaciones } from '../utils/storage';
 import { calcularValorHoraDesdeSueldo } from '../utils/reciboParser';
 
@@ -21,6 +21,7 @@ export default function CalculadoraHorasExtras() {
   // Configuración
   const [recargo, setRecargo] = useState('50'); // 50% por defecto
   const [horasSemanales, setHorasSemanales] = useState('44'); // 44h = jornada completa estándar
+  const [mostrarValorExtra, setMostrarValorExtra] = useState(false); // toggle normal/extra en resumen
 
   // Última liquidación (con o sin HE)
   const ultimaLiq = getLiquidaciones()
@@ -228,6 +229,30 @@ export default function CalculadoraHorasExtras() {
               {MESES[ultimaLiqConHE.mes - 1]} {ultimaLiqConHE.anio}
             </span>
           </div>
+          <div className="flex items-center justify-end gap-2 mb-2">
+            <button
+              onClick={() => setMostrarValorExtra(false)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                !mostrarValorExtra
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-700/40'
+                  : 'bg-gray-800 text-gray-500 border border-gray-700/30 hover:text-gray-400'
+              }`}
+            >
+              <ToggleLeft className="w-3 h-3" />
+              Normal
+            </button>
+            <button
+              onClick={() => setMostrarValorExtra(true)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${
+                mostrarValorExtra
+                  ? 'bg-orange-600/20 text-orange-400 border border-orange-700/40'
+                  : 'bg-gray-800 text-gray-500 border border-gray-700/30 hover:text-gray-400'
+              }`}
+            >
+              <ToggleRight className="w-3 h-3" />
+              +{recargoNum}% extra
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
               <p className="text-[10px] text-gray-500 mb-0.5">Cantidad</p>
@@ -236,9 +261,14 @@ export default function CalculadoraHorasExtras() {
               </p>
             </div>
             <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
-              <p className="text-[10px] text-gray-500 mb-0.5">Valor Hora</p>
-              <p className="text-sm font-bold text-blue-400">
-                ${ultimaLiqConHE.detalleHorasExtras.valorHora.toLocaleString('es-CL')}
+              <p className="text-[10px] text-gray-500 mb-0.5">
+                {mostrarValorExtra ? 'Valor Hora Extra' : 'Valor Hora Normal'}
+              </p>
+              <p className={`text-sm font-bold ${mostrarValorExtra ? 'text-orange-400' : 'text-blue-400'}`}>
+                ${(mostrarValorExtra
+                  ? ultimaLiqConHE.detalleHorasExtras.valorHora * (1 + recargoNum / 100)
+                  : ultimaLiqConHE.detalleHorasExtras.valorHora
+                ).toLocaleString('es-CL')}
               </p>
             </div>
             <div className="bg-gray-800/50 rounded-xl p-2.5 text-center">
