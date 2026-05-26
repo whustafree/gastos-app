@@ -244,28 +244,45 @@ export function parseLiquidacionText(rawText: string): DatosLiquidacion {
 
   // Detalle de horas extras (MEJORADO: más patrones + calcular desde sueldo si no se detecta)
   let detalleHorasExtras: { cantidad: number; valorHora: number; total: number } | undefined;
-  const hePatterns = [
-    // Formato: "10 horas extras x $5.000"
-    /(\d+)\s*(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(?:x|por|@)?\s*\$?\s*([\d.,]+)/i,
-    // Formato: "Horas extras 10 $50.000" / "H.Extras 10 $50.000"
-    /horas?\s*(?:extras?)?\s*(\d+)\s*(?:x|por|@)?\s*\$?\s*([\d.,]+)/i,
-    // Formato: "H.E. 10 $50.000"
+  
+  // ── Patrón A: Con separador "x" / "por" / "@" → segundo número es VALOR HORA ──
+  // "10 horas extras x $5.000" → cantidad=10, valorHora=5.000, total=10*5000=50.000
+  const hePatternConSep = /(\d+)\s*(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(?:x|por|@)\s*\$?\s*([\d.,]+)/i;
+  
+  // ── Patrón B: Sin separador → segundo número es TOTAL (formato típico chileno) ──
+  // "Horas Extras 10 $50.000" → cantidad=10, total=50.000, valorHora=50.000/10=5.000
+  const hePatternSinSep = [
+    /(?:horas?|hrs?|hras?)\s*(?:extras?|extraordinarias?)?\s*(\d+)\s*\$?\s*([\d.,]+)/i,
     /h\.?\s*e\.?\s*(\d+)\s*\$?\s*([\d.,]+)/i,
-    // Formato: "HE 10 $50.000"
-    /\bhe\b\s*(\d+)\s*[^$]*?\$?\s*([\d.,]+)/i,
-    // Formato: tabular: "10 5000 50000" cerca de "extras"
+    /\bhe\b\s*(\d+)\s*\$?\s*([\d.,]+)/i,
     /extras[^\n]*?(\d+)[^\n]*?(\d[\.\d,]*)/i,
   ];
   
-  // Primero intentar con los patrones de detalle (cantidad × valorHora)
-  for (const p of hePatterns) {
-    const m = text.match(p);
-    if (m && m[1] && m[2]) {
-      const cantidad = parseInt(m[1]);
-      const valorHora = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
-      if (!isNaN(cantidad) && cantidad > 0 && !isNaN(valorHora) && valorHora > 0) {
-        detalleHorasExtras = { cantidad, valorHora, total: cantidad * valorHora };
-        break;
+  // 1) Primero intentar patrón CON separador (más específico)
+  const mConSep = text.match(hePatternConSep);
+  if (mConSep && mConSep[1] && mConSep[2]) {
+    const cantidad = parseInt(mConSep[1]);
+    const valorHora = parseFloat(mConSep[2].replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(cantidad) && cantidad > 0 && !isNaN(valorHora) && valorHora > 0) {
+      detalleHorasExtras = { cantidad, valorHora, total: cantidad * valorHora };
+    }
+  }
+  
+  // 2) Si no, intentar patrones SIN separador
+  //    En el formato típico chileno "Horas Extras 10 $50.000", el segundo número es TOTAL
+  if (!detalleHorasExtras) {
+    for (const p of hePatternSinSep) {
+      const m = text.match(p);
+      if (m && m[1] && m[2]) {
+        const cantidad = parseInt(m[1]);
+        const total = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(cantidad) && cantidad > 0 && !isNaN(total) && total > 0) {
+          const valorHora = Math.round(total / cantidad);
+          if (valorHora > 0) {
+            detalleHorasExtras = { cantidad, valorHora, total };
+            break;
+          }
+        }
       }
     }
   }
